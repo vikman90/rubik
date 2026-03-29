@@ -23,6 +23,7 @@ impl Move {
     }
 
     /// Returns the inverse of this move.
+    #[allow(dead_code)]
     pub fn inverse(self) -> Self {
         Self {
             face: self.face,

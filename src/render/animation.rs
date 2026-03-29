@@ -28,6 +28,7 @@ impl AnimationState {
 }
 
 /// Component tag for cubelets currently participating in a face rotation.
+#[allow(dead_code)]
 #[derive(Component)]
 pub struct RotationAnimation {
     pub axis: Vec3,
@@ -37,6 +38,7 @@ pub struct RotationAnimation {
 }
 
 /// Returns the rotation axis and sign for a face move.
+#[allow(dead_code)]
 pub fn face_axis(face: Face) -> Vec3 {
     match face {
         Face::U => Vec3::Y,
@@ -49,6 +51,7 @@ pub fn face_axis(face: Face) -> Vec3 {
 }
 
 /// Returns the grid coordinate that is fixed for cubelets on this face.
+#[allow(dead_code)]
 pub fn face_fixed_coord(face: Face) -> (Axis, i8) {
     match face {
         Face::U => (Axis::Y, 1),
@@ -60,5 +63,6 @@ pub fn face_fixed_coord(face: Face) -> (Axis, i8) {
     }
 }
 
+#[allow(dead_code)]
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Axis { X, Y, Z }

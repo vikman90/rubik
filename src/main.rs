@@ -13,7 +13,7 @@ use cube::state::Facelets;
 use render::{CubeletMarker, spawn_cube};
 use render::animation::AnimationState;
 use solver::{solve, SolveStats, SolveTimer};
-use ui::hud::{StatusText, StatsText, spawn_hud};
+use ui::hud::{spawn_hud, StatusText, StatsText};
 
 // ── Resources ─────────────────────────────────────────────────────────────────
 

@@ -5,4 +5,4 @@ pub mod scrambler;
 
 pub use cubie::Cube;
 pub use moves::Move;
-pub use state::CubeState;
+

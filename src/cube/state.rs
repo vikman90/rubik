@@ -1,12 +1,14 @@
 use super::Cube;
 
 /// High-level state derived from the cube for UI display.
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CubeState {
     Solved,
     Unsolved,
 }
 
+#[allow(dead_code)]
 impl CubeState {
     pub fn from_cube(cube: &Cube) -> Self {
         if cube.is_solved() {

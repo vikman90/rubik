@@ -15,6 +15,7 @@ pub const CUBELET_SIZE: f32 = 0.95;
 pub const GAP: f32 = 1.0;
 
 /// Marker component for cubelet mesh entities.
+#[allow(dead_code)]
 #[derive(Component)]
 pub struct CubeletMarker {
     /// (x, y, z) grid position in -1..=1
@@ -24,6 +25,7 @@ pub struct CubeletMarker {
 }
 
 /// Index into the 54-facelet array for this sticker.
+#[allow(dead_code)]
 #[derive(Component)]
 pub struct FaceletIndex(pub usize);
 
@@ -180,18 +182,4 @@ fn spawn_stickers(
             FaceletIndex(s.facelet),
         ));
     }
-}
-
-/// Despawn all cubelet entities and respawn with updated facelets.
-pub fn rebuild_cube(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-    cubelet_query: &Query<Entity, With<CubeletMarker>>,
-    facelets: &Facelets,
-) {
-    for entity in cubelet_query.iter() {
-        commands.entity(entity).despawn();
-    }
-    spawn_cube(commands, meshes, materials, facelets);
 }

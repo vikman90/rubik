@@ -72,14 +72,12 @@ impl SolveStats {
 /// RAII timer that records into SolveStats when dropped.
 pub struct SolveTimer {
     start: Instant,
-    steps: usize,
 }
 
 impl SolveTimer {
     pub fn start() -> Self {
         Self {
             start: Instant::now(),
-            steps: 0,
         }
     }
 
