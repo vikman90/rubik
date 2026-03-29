@@ -1,5 +1,6 @@
-pub mod idas;
+// idas is deprecated
 pub mod stats;
+pub mod kociemba_solver;
 
-pub use idas::solve;
+pub use kociemba_solver::solve;
 pub use stats::{SolveStats, SolveTimer};

@@ -97,8 +97,8 @@ fn spawn_stickers(
 
     // U face (gy == 1)
     if gy == 1 {
-        let col = (gx + 1) as usize;   // 0,1,2 -> left to right
-        let row = (1 - gz) as usize;   // gz=+1->row0, gz=0->row1, gz=-1->row2
+        let col = (gx + 1) as usize;
+        let row = (gz + 1) as usize;   // Kociemba: gz=-1(Back) -> row0, gz=+1(Front) -> row2
         let fi = row * 3 + col;
         stickers.push(StickerDef {
             face: 0, facelet: 0 * 9 + fi,
@@ -109,7 +109,7 @@ fn spawn_stickers(
     // D face (gy == -1)
     if gy == -1 {
         let col = (gx + 1) as usize;
-        let row = (gz + 1) as usize;   // gz=-1->row0, gz=0->row1, gz=+1->row2
+        let row = (1 - gz) as usize;   // Kociemba: gz=+1(Front) -> row0, gz=-1(Back) -> row2
         let fi = row * 3 + col;
         stickers.push(StickerDef {
             face: 3, facelet: 3 * 9 + fi,

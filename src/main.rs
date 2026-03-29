@@ -64,6 +64,7 @@ fn main() {
             keyboard_input,
             orbit_camera,
             update_hud,
+            tick_animation,
         ))
         .run();
 }
@@ -250,6 +251,27 @@ fn update_hud(
                 s.avg_duration_ms(),
                 s.avg_steps_per_ms(),
             );
+        }
+    }
+}
+
+// ── Animation Cooldown (Temporary until visual animation is built) ─────────────
+
+fn tick_animation(mut anim: ResMut<AnimationState>, time: Res<Time>) {
+    if !anim.active { return; }
+
+    // In Bevy 0.15 time delta can be retrieved as f32
+    anim.elapsed += time.delta_secs();
+
+    if anim.elapsed >= anim.duration {
+        if !anim.pending_moves.is_empty() {
+            anim.pending_moves.remove(0); // Pop the front
+        }
+
+        if anim.pending_moves.is_empty() {
+            anim.active = false;
+        } else {
+            anim.elapsed = 0.0;
         }
     }
 }

@@ -1,41 +1,27 @@
 use super::moves::{Face, Move};
 
-/// Corner pieces: 8 corners, each with position (0..8) and orientation (0..3).
-/// Orientation 0 = solved, 1 = CW twist, 2 = CCW twist.
+/// Standar Kociemba 54-facelet representation.
+/// Faces: U=0, R=1, F=2, D=3, L=4, B=5.
+/// Each face has 9 facelets row-major (0=top-left, 8=bottom-right).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cube {
-    /// corner_pos[i] = which corner is at slot i (0..8)
-    pub corner_pos: [u8; 8],
-    /// corner_ori[i] = orientation of corner at slot i (0..3)
-    pub corner_ori: [u8; 8],
-    /// edge_pos[i] = which edge is at slot i (0..12)
-    pub edge_pos: [u8; 12],
-    /// edge_ori[i] = orientation of edge at slot i (0..2)
-    pub edge_ori: [u8; 12],
+    pub facelets: [u8; 54],
 }
-
-/// Corner slot indices (cubie positions around the cube):
-/// 0=URF 1=UFL 2=ULB 3=UBR 4=DFR 5=DLF 6=DBL 7=DRB
-///
-/// Edge slot indices:
-/// 0=UR 1=UF 2=UL 3=UB 4=DR 5=DF 6=DL 7=DB 8=FR 9=FL 10=BL 11=BR
 
 impl Cube {
     /// Returns a solved cube.
     pub fn solved() -> Self {
-        Self {
-            corner_pos: [0, 1, 2, 3, 4, 5, 6, 7],
-            corner_ori: [0; 8],
-            edge_pos: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-            edge_ori: [0; 12],
+        let mut facelets = [0; 54];
+        for i in 0..6 {
+            for j in 0..9 {
+                facelets[i * 9 + j] = i as u8;
+            }
         }
+        Self { facelets }
     }
 
     pub fn is_solved(&self) -> bool {
-        self.corner_pos == [0, 1, 2, 3, 4, 5, 6, 7]
-            && self.corner_ori == [0; 8]
-            && self.edge_pos == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-            && self.edge_ori == [0; 12]
+        self.facelets == Self::solved().facelets
     }
 
     pub fn apply(&mut self, m: Move) {
@@ -51,91 +37,61 @@ impl Cube {
     }
 
     fn apply_once(&mut self, face: Face) {
+        let face_off = match face {
+            Face::U => 0 * 9,
+            Face::R => 1 * 9,
+            Face::F => 2 * 9,
+            Face::D => 3 * 9,
+            Face::L => 4 * 9,
+            Face::B => 5 * 9,
+        };
+        let mut f = self.facelets; // mutate copy
+        
+        // Face internal cycle
+        Self::cycle4(&mut f, face_off + 0, face_off + 2, face_off + 8, face_off + 6);
+        Self::cycle4(&mut f, face_off + 1, face_off + 5, face_off + 7, face_off + 3);
+
+        // Adjacent panels
         match face {
-            Face::U => self.move_u(),
-            Face::D => self.move_d(),
-            Face::F => self.move_f(),
-            Face::B => self.move_b(),
-            Face::L => self.move_l(),
-            Face::R => self.move_r(),
+            Face::U => {
+                Self::cycle4(&mut f, 45+0, 9+0, 18+0, 36+0);
+                Self::cycle4(&mut f, 45+1, 9+1, 18+1, 36+1);
+                Self::cycle4(&mut f, 45+2, 9+2, 18+2, 36+2);
+            }
+            Face::D => {
+                Self::cycle4(&mut f, 18+6, 9+6, 45+6, 36+6);
+                Self::cycle4(&mut f, 18+7, 9+7, 45+7, 36+7);
+                Self::cycle4(&mut f, 18+8, 9+8, 45+8, 36+8);
+            }
+            Face::F => {
+                Self::cycle4(&mut f, 6, 9+0, 27+2, 36+8);
+                Self::cycle4(&mut f, 7, 9+3, 27+1, 36+5);
+                Self::cycle4(&mut f, 8, 9+6, 27+0, 36+2);
+            }
+            Face::B => {
+                Self::cycle4(&mut f, 0, 36+0, 27+8, 9+8);
+                Self::cycle4(&mut f, 1, 36+3, 27+7, 9+5);
+                Self::cycle4(&mut f, 2, 36+6, 27+6, 9+2);
+            }
+            Face::L => {
+                Self::cycle4(&mut f, 0, 18+0, 27+0, 45+8);
+                Self::cycle4(&mut f, 3, 18+3, 27+3, 45+5);
+                Self::cycle4(&mut f, 6, 18+6, 27+6, 45+2);
+            }
+            Face::R => {
+                Self::cycle4(&mut f, 2, 45+6, 27+2, 18+2);
+                Self::cycle4(&mut f, 5, 45+3, 27+5, 18+5);
+                Self::cycle4(&mut f, 8, 45+0, 27+8, 18+8);
+            }
         }
+        self.facelets = f;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    fn cycle4_corners(&mut self, a: usize, b: usize, c: usize, d: usize) {
-        let (p, o) = (&mut self.corner_pos, &mut self.corner_ori);
-        let tmp_p = p[d];
-        let tmp_o = o[d];
-        p[d] = p[c]; o[d] = o[c];
-        p[c] = p[b]; o[c] = o[b];
-        p[b] = p[a]; o[b] = o[a];
-        p[a] = tmp_p; o[a] = tmp_o;
-    }
-
-    fn cycle4_edges(&mut self, a: usize, b: usize, c: usize, d: usize) {
-        let (p, o) = (&mut self.edge_pos, &mut self.edge_ori);
-        let tmp_p = p[d];
-        let tmp_o = o[d];
-        p[d] = p[c]; o[d] = o[c];
-        p[c] = p[b]; o[c] = o[b];
-        p[b] = p[a]; o[b] = o[a];
-        p[a] = tmp_p; o[a] = tmp_o;
-    }
-
-    fn twist_corners(&mut self, slots: &[usize], deltas: &[u8]) {
-        for (&slot, &delta) in slots.iter().zip(deltas.iter()) {
-            self.corner_ori[slot] = (self.corner_ori[slot] + delta) % 3;
-        }
-    }
-
-    fn flip_edges(&mut self, slots: &[usize]) {
-        for &slot in slots {
-            self.edge_ori[slot] ^= 1;
-        }
-    }
-
-    // ── Face moves ────────────────────────────────────────────────────────────
-    // Corner slots:  0=URF 1=UFL 2=ULB 3=UBR 4=DFR 5=DLF 6=DBL 7=DRB
-    // Edge slots:    0=UR  1=UF  2=UL  3=UB  4=DR  5=DF  6=DL  7=DB  8=FR 9=FL 10=BL 11=BR
-
-    fn move_u(&mut self) {
-        self.cycle4_corners(0, 3, 2, 1); // URF UBR ULB UFL
-        self.cycle4_edges(0, 3, 2, 1);   // UR  UB  UL  UF
-        // U moves don't change orientations
-    }
-
-    fn move_d(&mut self) {
-        self.cycle4_corners(4, 5, 6, 7); // DFR DLF DBL DRB
-        self.cycle4_edges(4, 6, 7, 5);   // DR  DL  DB  DF  (note order: CW when looking from below)
-        // D moves don't change orientations
-    }
-
-    fn move_f(&mut self) {
-        self.cycle4_corners(0, 1, 5, 4); // URF UFL DLF DFR
-        self.cycle4_edges(1, 9, 5, 8);   // UF  FL  DF  FR
-        self.twist_corners(&[0, 1, 5, 4], &[2, 1, 2, 1]);
-        self.flip_edges(&[1, 9, 5, 8]);
-    }
-
-    fn move_b(&mut self) {
-        self.cycle4_corners(2, 3, 7, 6); // ULB UBR DRB DBL
-        self.cycle4_edges(3, 11, 7, 10); // UB  BR  DB  BL
-        self.twist_corners(&[2, 3, 7, 6], &[1, 2, 1, 2]);
-        self.flip_edges(&[3, 11, 7, 10]);
-    }
-
-    fn move_l(&mut self) {
-        self.cycle4_corners(1, 2, 6, 5); // UFL ULB DBL DLF
-        self.cycle4_edges(2, 10, 6, 9);  // UL  BL  DL  FL
-        self.twist_corners(&[1, 2, 6, 5], &[2, 1, 2, 1]);
-        // L moves don't flip edges
-    }
-
-    fn move_r(&mut self) {
-        self.cycle4_corners(3, 0, 4, 7); // UBR URF DFR DRB
-        self.cycle4_edges(0, 8, 4, 11);  // UR  FR  DR  BR
-        self.twist_corners(&[3, 0, 4, 7], &[1, 2, 1, 2]);
-        // R moves don't flip edges
+    fn cycle4(f: &mut [u8; 54], a: usize, b: usize, c: usize, d: usize) {
+        let tmp = f[d];
+        f[d] = f[c];
+        f[c] = f[b];
+        f[b] = f[a];
+        f[a] = tmp;
     }
 }
