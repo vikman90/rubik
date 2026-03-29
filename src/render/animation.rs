@@ -21,10 +21,6 @@ impl AnimationState {
         self.elapsed = 0.0;
         self.current_move = None;
     }
-
-    pub fn is_busy(&self) -> bool {
-        self.active || !self.pending_moves.is_empty()
-    }
 }
 
 /// Component tag for cubelets currently participating in a face rotation.

@@ -2,6 +2,9 @@ use crate::cube::{Cube, Move};
 use crate::cube::moves::Face;
 use kewb::{FaceCube, CubieCube, Solver, DataTable};
 use std::convert::TryFrom;
+use std::sync::OnceLock;
+
+static DATA_TABLE: OnceLock<DataTable> = OnceLock::new();
 
 pub fn solve(cube: &Cube) -> Option<Vec<Move>> {
     if cube.is_solved() {
@@ -22,8 +25,9 @@ pub fn solve(cube: &Cube) -> Option<Vec<Move>> {
         Err(_) => return None,
     };
 
-    let table = DataTable::default();
-    let mut solver = Solver::new(&table, 23, Some(5.0));
+    let table = DATA_TABLE.get_or_init(|| DataTable::default());
+    // Max 32 moves ensures phase 1 + phase 2 completes in < 1ms usually.
+    let mut solver = Solver::new(table, 32, Some(5.0));
 
     // Solve the state
     let solution = solver.solve(state)?;
@@ -59,4 +63,28 @@ fn parse_moves(s: &str) -> Vec<Move> {
         };
         Some(Move::new(face, turns))
     }).collect()
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cube::Cube;
+    use crate::cube::scrambler::scramble;
+
+    #[test]
+    fn test_solve_random_combinations() {
+        for seed in 0..1000 {
+            let mut cube = Cube::solved();
+            let mut history = vec![];
+            let moves = scramble(20);
+            for m in moves {
+                cube.apply(m);
+                history.push(m);
+                
+                let s = solve(&cube);
+                if s.is_none() {
+                    panic!("FAILED ON SEED: {}\nHISTORY: {:?}", seed, history);
+                }
+            }
+        }
+    }
 }

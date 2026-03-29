@@ -68,23 +68,3 @@ impl SolveStats {
         self.records.last()
     }
 }
-
-/// RAII timer that records into SolveStats when dropped.
-pub struct SolveTimer {
-    start: Instant,
-}
-
-impl SolveTimer {
-    pub fn start() -> Self {
-        Self {
-            start: Instant::now(),
-        }
-    }
-
-    pub fn finish(self, steps: usize) -> SolveRecord {
-        SolveRecord {
-            steps,
-            duration: self.start.elapsed(),
-        }
-    }
-}

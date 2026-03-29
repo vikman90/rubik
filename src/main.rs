@@ -12,7 +12,11 @@ use cube::scrambler::scramble;
 use cube::state::Facelets;
 use render::{CubeletMarker, spawn_cube};
 use render::animation::AnimationState;
-use solver::{solve, SolveStats, SolveTimer};
+use solver::{solve, SolveStats};
+use std::sync::mpsc::{channel, Receiver};
+use std::sync::Mutex;
+use std::thread;
+use std::time::Instant;
 use ui::hud::{spawn_hud, StatusText, StatsText};
 
 // ── Resources ─────────────────────────────────────────────────────────────────
@@ -22,6 +26,36 @@ struct CubeResource(Cube);
 
 #[derive(Resource)]
 struct Stats(SolveStats);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AppMode {
+    Idle,
+    Calculating,
+    Animating,
+}
+
+#[derive(Resource)]
+struct AppState(AppMode);
+
+impl Default for AppState {
+    fn default() -> Self {
+        AppState(AppMode::Idle)
+    }
+}
+
+struct SolveResult {
+    solution: Option<Vec<Move>>,
+    duration: std::time::Duration,
+}
+
+#[derive(Resource)]
+struct SolveChannel(pub Mutex<Option<Receiver<SolveResult>>>);
+
+impl Default for SolveChannel {
+    fn default() -> Self {
+        SolveChannel(Mutex::new(None))
+    }
+}
 
 #[derive(Resource)]
 struct OrbitCamera {
@@ -56,15 +90,18 @@ fn main() {
         }))
         .insert_resource(CubeResource(Cube::solved()))
         .insert_resource(Stats(SolveStats::new()))
-        .insert_resource(AnimationState::default())
-        .insert_resource(OrbitCamera::default())
+        .init_resource::<AnimationState>()
+        .init_resource::<OrbitCamera>()
+        .init_resource::<AppState>()
+        .init_resource::<SolveChannel>()
         .insert_resource(ClearColor(Color::srgb(0.12, 0.12, 0.18)))
         .add_systems(Startup, setup)
         .add_systems(Update, (
             keyboard_input,
             orbit_camera,
             update_hud,
-            tick_animation,
+            animate_cube,
+            poll_solver,
         ))
         .run();
 }
@@ -108,11 +145,12 @@ fn setup(
 
 fn keyboard_input(
     keys: Res<ButtonInput<KeyCode>>,
-    mut stats: ResMut<Stats>,
     mut anim: ResMut<AnimationState>,
+    mut app_state: ResMut<AppState>,
+    channel_res: Res<SolveChannel>,
     cube_res: Res<CubeResource>,
 ) {
-    if anim.is_busy() {
+    if app_state.0 != AppMode::Idle || anim.active {
         return;
     }
 
@@ -143,12 +181,20 @@ fn keyboard_input(
         if cube_res.0.is_solved() {
             return;
         }
-        let timer = SolveTimer::start();
-        if let Some(solution) = solve(&cube_res.0) {
-            let record = timer.finish(solution.len());
-            stats.0.record(record.steps, record.duration);
-            anim.queue(solution, 0.25);
-        }
+        
+        // Spawn asynchronous solve task
+        let (tx, rx) = channel();
+        *channel_res.0.lock().unwrap() = Some(rx);
+        app_state.0 = AppMode::Calculating;
+        
+        // Clone state for thread
+        let local_cube = cube_res.0.clone();
+        thread::spawn(move || {
+            let start = Instant::now();
+            let solution = solve(&local_cube);
+            let duration = start.elapsed();
+            let _ = tx.send(SolveResult { solution, duration });
+        });
     }
 }
 
@@ -211,18 +257,29 @@ fn orbit_camera(
 fn update_hud(
     cube_res: Res<CubeResource>,
     stats: Res<Stats>,
+    app_state: Res<AppState>,
     mut status_query: Query<(&mut Text, &mut TextColor), (With<StatusText>, Without<StatsText>)>,
     mut stats_query: Query<&mut Text, (With<StatsText>, Without<StatusText>)>,
 ) {
-    let solved = cube_res.0.is_solved();
-
     for (mut text, mut color) in status_query.iter_mut() {
-        if solved {
-            text.0 = "● SOLVED".to_string();
-            color.0 = Color::srgb(0.2, 1.0, 0.4);
-        } else {
-            text.0 = "● UNSOLVED".to_string();
-            color.0 = Color::srgb(1.0, 0.3, 0.3);
+        match app_state.0 {
+            AppMode::Idle => {
+                if cube_res.0.is_solved() {
+                    text.0 = "● SOLVED".to_string();
+                    color.0 = Color::srgb(0.2, 1.0, 0.4);
+                } else {
+                    text.0 = "● UNSOLVED".to_string();
+                    color.0 = Color::srgb(1.0, 0.3, 0.3);
+                }
+            }
+            AppMode::Calculating => {
+                text.0 = "● CALCULATING...".to_string();
+                color.0 = Color::srgb(1.0, 0.8, 0.0);
+            }
+            AppMode::Animating => {
+                text.0 = "● SOLVING...".to_string();
+                color.0 = Color::srgb(0.2, 0.8, 1.0);
+            }
         }
     }
 
@@ -247,8 +304,9 @@ fn update_hud(
 
 // ── Animation ─────────────────────────────────────────────────────────────────
 
-fn tick_animation(
+fn animate_cube(
     mut anim: ResMut<AnimationState>,
+    mut app_state: ResMut<AppState>,
     time: Res<Time>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -256,11 +314,17 @@ fn tick_animation(
     mut cubelet_query: Query<(Entity, &CubeletMarker, &mut Transform, Option<&mut render::animation::RotationAnimation>)>,
     mut cube_res: ResMut<CubeResource>,
 ) {
-    if !anim.active { return; }
+    if !anim.active {
+        // If animation is marked active externally but ended internally, we sync mode.
+        return;
+    }
 
     if anim.current_move.is_none() {
         if anim.pending_moves.is_empty() {
             anim.active = false;
+            if app_state.0 == AppMode::Animating {
+                app_state.0 = AppMode::Idle;
+            }
             return;
         }
         let m = anim.pending_moves.remove(0);
@@ -321,6 +385,31 @@ fn tick_animation(
             cube_res.0.apply(m);
             // Snap mesh exactly to geometric boundaries
             rebuild_mesh(&mut commands, &mut meshes, &mut materials, &cubelet_query, &cube_res.0);
+        }
+    }
+}
+
+fn poll_solver(
+    channel_res: Res<SolveChannel>,
+    mut app_state: ResMut<AppState>,
+    mut anim: ResMut<AnimationState>,
+    mut stats: ResMut<Stats>,
+) {
+    let mut lock = channel_res.0.lock().unwrap();
+    if let Some(rx) = lock.as_ref() {
+        if let Ok(result) = rx.try_recv() {
+            // Computation finished
+            *lock = None;
+            
+            if let Some(solution) = result.solution {
+                let steps = solution.len();
+                stats.0.record(steps, result.duration);
+                anim.queue(solution, 0.25);
+                app_state.0 = AppMode::Animating;
+            } else {
+                // If None, back to idle (timeout or unsolvable)
+                app_state.0 = AppMode::Idle;
+            }
         }
     }
 }

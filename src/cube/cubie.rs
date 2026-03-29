@@ -63,9 +63,9 @@ impl Cube {
                 Self::cycle4(&mut f, 8, 9+6, 27+0, 36+2);
             }
             Face::B => {
-                Self::cycle4(&mut f, 0, 36+0, 27+8, 9+8);
+                Self::cycle4(&mut f, 0, 36+6, 27+8, 9+2);
                 Self::cycle4(&mut f, 1, 36+3, 27+7, 9+5);
-                Self::cycle4(&mut f, 2, 36+6, 27+6, 9+2);
+                Self::cycle4(&mut f, 2, 36+0, 27+6, 9+8);
             }
             Face::L => {
                 Self::cycle4(&mut f, 0, 18+0, 27+0, 45+8);
