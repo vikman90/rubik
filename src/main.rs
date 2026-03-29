@@ -289,13 +289,12 @@ fn update_hud(
         } else {
             let last = s.last().unwrap();
             text.0 = format!(
-                "Solves: {}   Last: {} steps / {:.1} ms   Avg: {:.1} steps / {:.1} ms   Speed: {:.2} steps/ms",
+                "Solves: {}   Last: {} steps / {:.1} ms   Avg: {:.1} steps / {:.1} ms",
                 s.count(),
                 last.steps,
                 last.duration.as_secs_f64() * 1000.0,
                 s.avg_steps(),
-                s.avg_duration_ms(),
-                s.avg_steps_per_ms(),
+                s.avg_duration_ms()
             );
         }
     }
