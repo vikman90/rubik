@@ -230,7 +230,7 @@ fn orbit_camera(
     if orbit.dragging {
         for ev in mouse_motion.read() {
             orbit.yaw -= ev.delta.x * 0.005;
-            orbit.pitch = (orbit.pitch - ev.delta.y * 0.005)
+            orbit.pitch = (orbit.pitch + ev.delta.y * 0.005)
                 .clamp(-std::f32::consts::FRAC_PI_2 + 0.1, std::f32::consts::FRAC_PI_2 - 0.1);
         }
     } else {
