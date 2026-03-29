@@ -116,23 +116,25 @@ fn setup(
     commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(0.0, 4.0, 8.0).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
+    )).with_children(|parent| {
+        // We spawn the DirectionalLight as a child entity of the camera.
+        // This ensures the light inherits the camera's translation and rotation
+        // without causing an ECS extraction clash in Bevy's renderer.
+        parent.spawn((
+            DirectionalLight {
+                illuminance: 8000.0,
+                shadows_enabled: true,
+                ..default()
+            },
+            Transform::default(),
+        ));
+    });
 
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 8000.0,
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.8, 0.5, 0.0)),
-    ));
-    commands.spawn((
-        PointLight {
-            intensity: 4000.0,
-            ..default()
-        },
-        Transform::from_xyz(-4.0, 6.0, 4.0),
-    ));
+    // Ambient light to ensure the hidden sides are never pitch black
+    commands.insert_resource(AmbientLight {
+        color: Color::WHITE,
+        brightness: 150.0,
+    });
 
     let facelets = Facelets::from_cube(&cube_res.0);
     spawn_cube(&mut commands, &mut meshes, &mut materials, &facelets);
@@ -180,12 +182,12 @@ fn keyboard_input(
         if cube_res.0.is_solved() {
             return;
         }
-        
+
         // Spawn asynchronous solve task
         let (tx, rx) = channel();
         *channel_res.0.lock().unwrap() = Some(rx);
         app_state.0 = AppMode::Calculating;
-        
+
         // Clone state for thread
         let local_cube = cube_res.0.clone();
         thread::spawn(move || {
@@ -328,7 +330,7 @@ fn animate_cube(
         let m = anim.pending_moves.remove(0);
         anim.current_move = Some(m);
         anim.elapsed = 0.0;
-        
+
         let (axis, fixed_val) = rubik::render::animation::face_fixed_coord(m.face);
         let rotation_axis = rubik::render::animation::face_axis(m.face);
         let total_angle = rubik::render::animation::turn_angle(m.turns);
@@ -361,9 +363,9 @@ fn animate_cube(
             let old_frac = (rot.elapsed / rot.duration).clamp(0.0, 1.0);
             rot.elapsed += dt;
             let new_frac = (rot.elapsed / rot.duration).clamp(0.0, 1.0);
-            
+
             let delta_angle = (new_frac - old_frac) * rot.total_angle;
-            
+
             // Rotate around origin (0, 0, 0)
             let quat = Quat::from_axis_angle(rot.axis, delta_angle);
             transform.translation = quat * transform.translation;
@@ -398,7 +400,7 @@ fn poll_solver(
         if let Ok(result) = rx.try_recv() {
             // Computation finished
             *lock = None;
-            
+
             if let Some(solution) = result.solution {
                 let steps = solution.len();
                 stats.0.record(steps, result.duration);
