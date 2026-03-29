@@ -1,23 +1,22 @@
+#![allow(dead_code, unused_imports, unused_variables, unused_mut, unreachable_code)]
+
 mod cube;
 mod solver;
-mod render;
-mod ui;
-
 use bevy::prelude::*;
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 
-use cube::{Cube, Move};
-use cube::moves::Face;
-use cube::scrambler::scramble;
-use cube::state::Facelets;
-use render::{CubeletMarker, spawn_cube};
-use render::animation::AnimationState;
-use solver::{solve, SolveStats};
-use std::sync::mpsc::{channel, Receiver};
+use rubik::cube::moves::{Face, Move};
+use rubik::cube::scrambler::scramble;
+use rubik::cube::state::Facelets;
+use rubik::cube::Cube;
+use rubik::render::animation::AnimationState;
+use rubik::render::{CubeletMarker, spawn_cube};
+use rubik::solver::{SolveStats, solve};
+use std::sync::mpsc::{Receiver, channel};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Instant;
-use ui::hud::{spawn_hud, StatusText, StatsText};
+use rubik::ui::hud::{StatsText, StatusText, spawn_hud};
 
 // ── Resources ─────────────────────────────────────────────────────────────────
 
@@ -202,7 +201,7 @@ fn rebuild_mesh(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    cubelet_query: &Query<(Entity, &CubeletMarker, &mut Transform, Option<&mut render::animation::RotationAnimation>)>,
+    cubelet_query: &Query<(Entity, &CubeletMarker, &mut Transform, Option<&mut rubik::render::animation::RotationAnimation>)>,
     cube: &Cube,
 ) {
     for (entity, _, _, _) in cubelet_query.iter() {
@@ -311,7 +310,7 @@ fn animate_cube(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut cubelet_query: Query<(Entity, &CubeletMarker, &mut Transform, Option<&mut render::animation::RotationAnimation>)>,
+    mut cubelet_query: Query<(Entity, &CubeletMarker, &mut Transform, Option<&mut rubik::render::animation::RotationAnimation>)>,
     mut cube_res: ResMut<CubeResource>,
 ) {
     if !anim.active {
@@ -331,18 +330,18 @@ fn animate_cube(
         anim.current_move = Some(m);
         anim.elapsed = 0.0;
         
-        let (axis, fixed_val) = render::animation::face_fixed_coord(m.face);
-        let rotation_axis = render::animation::face_axis(m.face);
-        let total_angle = render::animation::turn_angle(m.turns);
+        let (axis, fixed_val) = rubik::render::animation::face_fixed_coord(m.face);
+        let rotation_axis = rubik::render::animation::face_axis(m.face);
+        let total_angle = rubik::render::animation::turn_angle(m.turns);
 
         for (entity, marker, _, _) in cubelet_query.iter() {
             let matches = match axis {
-                render::animation::Axis::X => marker.grid.0 == fixed_val,
-                render::animation::Axis::Y => marker.grid.1 == fixed_val,
-                render::animation::Axis::Z => marker.grid.2 == fixed_val,
+                rubik::render::animation::Axis::X => marker.grid.0 == fixed_val,
+                rubik::render::animation::Axis::Y => marker.grid.1 == fixed_val,
+                rubik::render::animation::Axis::Z => marker.grid.2 == fixed_val,
             };
             if matches {
-                commands.entity(entity).insert(render::animation::RotationAnimation {
+                commands.entity(entity).insert(rubik::render::animation::RotationAnimation {
                     axis: rotation_axis,
                     total_angle,
                     elapsed: 0.0,
@@ -372,7 +371,7 @@ fn animate_cube(
             transform.rotation = quat * transform.rotation;
 
             if rot.elapsed >= rot.duration {
-                commands.entity(entity).remove::<render::animation::RotationAnimation>();
+                commands.entity(entity).remove::<rubik::render::animation::RotationAnimation>();
                 finished = true;
             }
         }
