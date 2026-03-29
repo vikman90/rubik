@@ -30,12 +30,6 @@ impl Cube {
         }
     }
 
-    pub fn apply_sequence(&mut self, moves: &[Move]) {
-        for &m in moves {
-            self.apply(m);
-        }
-    }
-
     fn apply_once(&mut self, face: Face) {
         let face_off = match face {
             Face::U => 0 * 9,

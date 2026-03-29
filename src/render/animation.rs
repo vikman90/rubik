@@ -40,14 +40,24 @@ pub struct RotationAnimation {
 /// Returns the rotation axis and sign for a face move.
 #[allow(dead_code)]
 pub fn face_axis(face: Face) -> Vec3 {
+    // We use pure outward normals.
+    // A standard Clockwise move will be a CCW rotation around the outward normal (-PI/2).
     match face {
         Face::U => Vec3::Y,
         Face::D => Vec3::NEG_Y,
-        Face::F => Vec3::NEG_Z,
-        Face::B => Vec3::Z,
-        Face::R => Vec3::NEG_X,
-        Face::L => Vec3::X,
+        Face::F => Vec3::Z,
+        Face::B => Vec3::NEG_Z,
+        Face::R => Vec3::X,
+        Face::L => Vec3::NEG_X,
     }
+}
+
+/// Returns the turn angle in radians for a given number of turns (Clockwise).
+pub fn turn_angle(turns: u8) -> f32 {
+    // 1 turn CW = -90 degrees around outward normal.
+    // 2 turns = -180 degrees.
+    // 3 turns (CCW) = -270 (+90) degrees.
+    (turns as f32) * -std::f32::consts::FRAC_PI_2
 }
 
 /// Returns the grid coordinate that is fixed for cubelets on this face.

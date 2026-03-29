@@ -108,13 +108,9 @@ fn setup(
 
 fn keyboard_input(
     keys: Res<ButtonInput<KeyCode>>,
-    mut cube_res: ResMut<CubeResource>,
     mut stats: ResMut<Stats>,
     mut anim: ResMut<AnimationState>,
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    cubelet_query: Query<Entity, With<CubeletMarker>>,
+    cube_res: Res<CubeResource>,
 ) {
     if anim.is_busy() {
         return;
@@ -133,17 +129,13 @@ fn keyboard_input(
 
     if let Some(face) = maybe_face {
         let m = Move::new(face, turns);
-        cube_res.0.apply(m);
         anim.queue(vec![m], 0.3);
-        rebuild_mesh(&mut commands, &mut meshes, &mut materials, &cubelet_query, &cube_res.0);
         return;
     }
 
     if keys.just_pressed(KeyCode::KeyS) {
         let moves = scramble(20);
-        cube_res.0.apply_sequence(&moves);
         anim.queue(moves, 0.12);
-        rebuild_mesh(&mut commands, &mut meshes, &mut materials, &cubelet_query, &cube_res.0);
         return;
     }
 
@@ -155,9 +147,7 @@ fn keyboard_input(
         if let Some(solution) = solve(&cube_res.0) {
             let record = timer.finish(solution.len());
             stats.0.record(record.steps, record.duration);
-            cube_res.0.apply_sequence(&solution);
             anim.queue(solution, 0.25);
-            rebuild_mesh(&mut commands, &mut meshes, &mut materials, &cubelet_query, &cube_res.0);
         }
     }
 }
@@ -166,10 +156,10 @@ fn rebuild_mesh(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-    cubelet_query: &Query<Entity, With<CubeletMarker>>,
+    cubelet_query: &Query<(Entity, &CubeletMarker, &mut Transform, Option<&mut render::animation::RotationAnimation>)>,
     cube: &Cube,
 ) {
-    for entity in cubelet_query.iter() {
+    for (entity, _, _, _) in cubelet_query.iter() {
         commands.entity(entity).despawn();
     }
     let facelets = Facelets::from_cube(cube);
@@ -255,23 +245,82 @@ fn update_hud(
     }
 }
 
-// ── Animation Cooldown (Temporary until visual animation is built) ─────────────
+// ── Animation ─────────────────────────────────────────────────────────────────
 
-fn tick_animation(mut anim: ResMut<AnimationState>, time: Res<Time>) {
+fn tick_animation(
+    mut anim: ResMut<AnimationState>,
+    time: Res<Time>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut cubelet_query: Query<(Entity, &CubeletMarker, &mut Transform, Option<&mut render::animation::RotationAnimation>)>,
+    mut cube_res: ResMut<CubeResource>,
+) {
     if !anim.active { return; }
 
-    // In Bevy 0.15 time delta can be retrieved as f32
-    anim.elapsed += time.delta_secs();
-
-    if anim.elapsed >= anim.duration {
-        if !anim.pending_moves.is_empty() {
-            anim.pending_moves.remove(0); // Pop the front
-        }
-
+    if anim.current_move.is_none() {
         if anim.pending_moves.is_empty() {
             anim.active = false;
-        } else {
-            anim.elapsed = 0.0;
+            return;
+        }
+        let m = anim.pending_moves.remove(0);
+        anim.current_move = Some(m);
+        anim.elapsed = 0.0;
+        
+        let (axis, fixed_val) = render::animation::face_fixed_coord(m.face);
+        let rotation_axis = render::animation::face_axis(m.face);
+        let total_angle = render::animation::turn_angle(m.turns);
+
+        for (entity, marker, _, _) in cubelet_query.iter() {
+            let matches = match axis {
+                render::animation::Axis::X => marker.grid.0 == fixed_val,
+                render::animation::Axis::Y => marker.grid.1 == fixed_val,
+                render::animation::Axis::Z => marker.grid.2 == fixed_val,
+            };
+            if matches {
+                commands.entity(entity).insert(render::animation::RotationAnimation {
+                    axis: rotation_axis,
+                    total_angle,
+                    elapsed: 0.0,
+                    duration: anim.duration,
+                });
+            }
+        }
+        return;
+    }
+
+    // Animate
+    let dt = time.delta_secs();
+    anim.elapsed += dt;
+    let mut finished = false;
+
+    for (entity, _, mut transform, mut opt_rot) in cubelet_query.iter_mut() {
+        if let Some(ref mut rot) = opt_rot {
+            let old_frac = (rot.elapsed / rot.duration).clamp(0.0, 1.0);
+            rot.elapsed += dt;
+            let new_frac = (rot.elapsed / rot.duration).clamp(0.0, 1.0);
+            
+            let delta_angle = (new_frac - old_frac) * rot.total_angle;
+            
+            // Rotate around origin (0, 0, 0)
+            let quat = Quat::from_axis_angle(rot.axis, delta_angle);
+            transform.translation = quat * transform.translation;
+            transform.rotation = quat * transform.rotation;
+
+            if rot.elapsed >= rot.duration {
+                commands.entity(entity).remove::<render::animation::RotationAnimation>();
+                finished = true;
+            }
+        }
+    }
+
+    // Usually duration ends at the same time for all entities, catching one true is enough.
+    if finished {
+        if let Some(m) = anim.current_move.take() {
+            // Commit move logically
+            cube_res.0.apply(m);
+            // Snap mesh exactly to geometric boundaries
+            rebuild_mesh(&mut commands, &mut meshes, &mut materials, &cubelet_query, &cube_res.0);
         }
     }
 }

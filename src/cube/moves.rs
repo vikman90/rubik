@@ -30,19 +30,6 @@ impl Move {
             turns: (4 - self.turns) % 4,
         }
     }
-
-    /// All 18 possible moves.
-    pub fn all() -> [Move; 18] {
-        use Face::*;
-        let faces = [U, D, F, B, L, R];
-        let mut moves = [Move::new(U, 1); 18];
-        for (i, face) in faces.iter().enumerate() {
-            moves[i * 3] = Move::new(*face, 1);
-            moves[i * 3 + 1] = Move::new(*face, 2);
-            moves[i * 3 + 2] = Move::new(*face, 3);
-        }
-        moves
-    }
 }
 
 impl std::fmt::Display for Move {
