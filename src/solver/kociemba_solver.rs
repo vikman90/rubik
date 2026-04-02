@@ -3,8 +3,44 @@ use crate::cube::moves::Face;
 use kewb::{FaceCube, CubieCube, Solver, DataTable};
 use std::convert::TryFrom;
 use std::sync::OnceLock;
+use std::path::PathBuf;
 
 static DATA_TABLE: OnceLock<DataTable> = OnceLock::new();
+
+/// Get the path to the cached DataTable file.
+/// Uses a platform-appropriate cache directory.
+fn get_cache_path() -> PathBuf {
+    let cache_dir = std::env::var("XDG_CACHE_HOME")
+        .ok()
+        .and_then(|p| if p.is_empty() { None } else { Some(PathBuf::from(p)) })
+        .or_else(|| {
+            std::env::var("HOME")
+                .ok()
+                .map(|h| PathBuf::from(h).join(".cache"))
+        })
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    cache_dir.join("rubik_solver_table.bin")
+}
+
+/// Load or generate the DataTable.
+/// First tries to load from cache, falls back to generating (which is slow).
+fn load_or_generate_table() -> DataTable {
+    let cache_path = get_cache_path();
+
+    // Try to load from cache
+    if let Ok(table) = kewb::fs::read_table(&cache_path) {
+        return table;
+    }
+
+    // Generate new table (slow - only happens once)
+    let table = DataTable::default();
+
+    // Try to save for next time (ignore errors)
+    let _ = kewb::fs::write_table(&cache_path);
+
+    table
+}
 
 pub fn solve(cube: &Cube) -> Option<Vec<Move>> {
     if cube.is_solved() {
@@ -25,7 +61,7 @@ pub fn solve(cube: &Cube) -> Option<Vec<Move>> {
         Err(_) => return None,
     };
 
-    let table = DATA_TABLE.get_or_init(DataTable::default);
+    let table = DATA_TABLE.get_or_init(load_or_generate_table);
 
     // In test builds, limit depth to 20 (plenty for short scrambles) to reduce
     // recursive call-stack depth. In release builds, use 28 for near-optimal solutions.
@@ -34,21 +70,19 @@ pub fn solve(cube: &Cube) -> Option<Vec<Move>> {
     #[cfg(not(test))]
     let max_length: u8 = 28;
 
-    // Use a generous 30-second timeout during tests so the solver returns the
-    // best solution found without relying on None-timeout infinite recursion,
-    // which can overflow the stack on Windows (1 MB default vs 8 MB on Unix).
-    // In production use a tighter 5-second limit.
-    #[cfg(test)]
-    let timeout_secs: f32 = 30.0;
-    #[cfg(not(test))]
-    let timeout_secs: f32 = 5.0;
+    // Use None as timeout to make the solver return immediately upon finding
+    // the first solution within max_length. The kewb solver with a timeout
+    // continues searching for better solutions until the timeout expires.
+    // Without a timeout, it returns the first valid solution found, which is
+    // much faster.
+    let timeout: Option<f32> = None;
 
     // Spawn solver on a thread with an explicit 8 MB stack to avoid stack
     // overflows on Windows (which defaults to a 1 MB thread stack).
     let result = std::thread::Builder::new()
         .stack_size(8 * 1024 * 1024)
         .spawn(move || {
-            let mut solver = Solver::new(table, max_length, Some(timeout_secs));
+            let mut solver = Solver::new(table, max_length, timeout);
             solver.solve(state)
         })
         .ok()?

@@ -3,8 +3,17 @@ name = "rubik"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "rubik"
+path = "src/main.rs"
+required-features = ["graphics"]
+
+[features]
+default = ["graphics"]
+graphics = ["bevy"]
+
 [dependencies]
-bevy = { version = "0.15", features = ["default"] }
+bevy = { version = "0.15", features = ["default"], optional = true }
 kewb = "0.4.3"
 rand = "0.8"
 rcuber = "0.7.20"
